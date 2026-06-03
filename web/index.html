@@ -87,6 +87,21 @@
         />
       </div>
 
+      <!-- Paused session card -->
+      <div class="paused-card" id="paused-card" style="display:none">
+        <div class="paused-left">
+          <span class="paused-icon">⏸</span>
+          <div class="paused-info">
+            <span class="paused-task-name" id="paused-task-name"></span>
+            <span class="paused-time-label" id="paused-time-label"></span>
+          </div>
+        </div>
+        <div class="paused-actions">
+          <button class="btn-end-paused" id="btn-end-paused">Acabar</button>
+          <button class="btn-resume" id="btn-resume">▶ Continuar</button>
+        </div>
+      </div>
+
       <!-- Start button -->
       <button class="btn-start" id="btn-start" disabled>
         Escriu el nom de la tasca

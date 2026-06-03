@@ -12,6 +12,7 @@ let state = {
 };
 
 let activeSession = null;
+let pausedSession = null;   // { id, taskName, startTime, targetDuration, elapsedSeconds }
 let timerInterval = null;
 let currentTaskName = '';
 let editingSessionId = null;
@@ -40,6 +41,12 @@ const els = {
   statBest: document.getElementById('stat-best'),
   statToday: document.getElementById('stat-today'),
   btnOpenHistory: document.getElementById('btn-open-history'),
+  // Paused session card
+  pausedCard: document.getElementById('paused-card'),
+  pausedTaskName: document.getElementById('paused-task-name'),
+  pausedTimeLabel: document.getElementById('paused-time-label'),
+  btnResume: document.getElementById('btn-resume'),
+  btnEndPaused: document.getElementById('btn-end-paused'),
   
   // Focus
   btnBack: document.getElementById('btn-back'),
@@ -107,16 +114,24 @@ function loadState() {
     }
   }
   
+  // Load paused session (has priority)
+  const savedPaused = localStorage.getItem('fitxa_paused_session');
+  if (savedPaused) {
+    try { pausedSession = JSON.parse(savedPaused); } catch(e) {}
+  }
+  // Convert any leftover active session to paused (app was closed mid-session)
   const savedSession = localStorage.getItem('fitxa_active_session');
-  if (savedSession) {
+  if (savedSession && !pausedSession) {
     try {
-      activeSession = JSON.parse(savedSession);
-      currentTaskName = activeSession.taskName;
-      showScreen('focus');
-      resumeTimer();
-    } catch (e) {
-      console.error('Error parsing active session', e);
-    }
+      const sess = JSON.parse(savedSession);
+      const elapsed = Math.min(
+        Math.floor((Date.now() - sess.startTime) / 1000),
+        sess.targetDuration
+      );
+      pausedSession = { ...sess, elapsedSeconds: elapsed };
+      localStorage.removeItem('fitxa_active_session');
+      localStorage.setItem('fitxa_paused_session', JSON.stringify(pausedSession));
+    } catch(e) {}
   }
 }
 
@@ -217,6 +232,20 @@ function renderHome() {
   } else {
     els.statsRow.style.display = 'none';
   }
+
+  // Paused session card
+  if (pausedSession) {
+    els.pausedCard.style.display = 'flex';
+    els.pausedTaskName.textContent = pausedSession.taskName;
+    const elapsed = pausedSession.elapsedSeconds;
+    const remaining = pausedSession.targetDuration - elapsed;
+    const em = Math.floor(elapsed / 60), es = elapsed % 60;
+    const rm = Math.floor(remaining / 60), rs = remaining % 60;
+    els.pausedTimeLabel.textContent =
+      `${em}:${String(es).padStart(2,'0')} registrats · ${rm}:${String(rs).padStart(2,'0')} restants`;
+  } else {
+    els.pausedCard.style.display = 'none';
+  }
   
   validateInput();
 }
@@ -256,11 +285,32 @@ function bindEvents() {
   
   els.btnStart.addEventListener('click', startSession);
   els.btnOpenHistory.addEventListener('click', () => showScreen('history'));
+  els.btnResume.addEventListener('click', resumePausedSession);
+  els.btnEndPaused.addEventListener('click', endPausedSession);
   
   // Focus
-  els.btnBack.addEventListener('click', () => endSession(0));
-  els.btnStop.addEventListener('click', () => endSession(0));
+  els.btnBack.addEventListener('click', pauseSession);
+  els.btnStop.addEventListener('click', pauseSession);
   els.btnDone.addEventListener('click', finishSession);
+
+  // Pause timer when app goes to background; resume when it comes back
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (activeSession && timerInterval) {
+        const elapsed = Math.floor((Date.now() - activeSession.startTime) / 1000);
+        activeSession._elapsedOnHide = elapsed;
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    } else {
+      if (activeSession && activeSession._elapsedOnHide !== undefined) {
+        activeSession.startTime = Date.now() - (activeSession._elapsedOnHide * 1000);
+        delete activeSession._elapsedOnHide;
+        tick();
+        timerInterval = setInterval(tick, 1000);
+      }
+    }
+  });
 
   // History / Calendar
   els.btnBackHistory.addEventListener('click', () => {
@@ -313,6 +363,9 @@ function validateInput() {
 // ─── Timer Logic ─────────────────────────────────────────────
 function startSession() {
   if (!currentTaskName.trim()) return;
+  // Clear any previous paused session when starting a new one
+  pausedSession = null;
+  localStorage.removeItem('fitxa_paused_session');
   const mins = parseInt(els.durationInput.value, 10) || 90;
   
   activeSession = {
@@ -331,6 +384,74 @@ function startSession() {
   resetFocusUI();
   showScreen('focus');
   resumeTimer();
+}
+
+// Pause the running session and return to home
+function pauseSession() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  els.timerContainer.classList.remove('running');
+  if (!activeSession) { showScreen('home'); return; }
+
+  const elapsed = Math.min(
+    Math.floor((Date.now() - activeSession.startTime) / 1000),
+    activeSession.targetDuration
+  );
+  pausedSession = {
+    id: activeSession.id,
+    taskName: activeSession.taskName,
+    startTime: activeSession.startTime,
+    targetDuration: activeSession.targetDuration,
+    elapsedSeconds: elapsed
+  };
+  activeSession = null;
+  localStorage.removeItem('fitxa_active_session');
+  localStorage.setItem('fitxa_paused_session', JSON.stringify(pausedSession));
+
+  showScreen('home');
+}
+
+// Resume a paused session
+function resumePausedSession() {
+  if (!pausedSession) return;
+  activeSession = {
+    id: pausedSession.id,
+    taskName: pausedSession.taskName,
+    startTime: Date.now() - (pausedSession.elapsedSeconds * 1000),
+    targetDuration: pausedSession.targetDuration
+  };
+  pausedSession = null;
+  localStorage.removeItem('fitxa_paused_session');
+  localStorage.setItem('fitxa_active_session', JSON.stringify(activeSession));
+
+  resetFocusUI();
+  showScreen('focus');
+  resumeTimer();
+}
+
+// End a paused session and save it
+function endPausedSession() {
+  if (!pausedSession) return;
+  const duration = pausedSession.elapsedSeconds;
+  const dateStr = new Date(pausedSession.startTime).toISOString().split('T')[0];
+
+  state.sessions.push({
+    id: pausedSession.id,
+    taskName: pausedSession.taskName,
+    startTime: pausedSession.startTime,
+    endTime: Date.now(),
+    duration,
+    completed: 0
+  });
+
+  if (!state.dailyGoals[dateStr]) state.dailyGoals[dateStr] = { totalSeconds: 0, goalMet: 0 };
+  state.dailyGoals[dateStr].totalSeconds += duration;
+  if (state.dailyGoals[dateStr].totalSeconds >= FOCUS_DURATION) state.dailyGoals[dateStr].goalMet = 1;
+
+  pausedSession = null;
+  localStorage.removeItem('fitxa_paused_session');
+  recalculateStreaks();
+  showScreen('home');
 }
 
 function resumeTimer() {
@@ -590,9 +711,13 @@ function selectDay(dateStr, dayData) {
             <span class="history-session-task">${session.taskName}</span>
             <span class="history-session-time">${timeFormatted} • ${durationMins} min ${session.completed ? '🎯' : ''}</span>
           </div>
-          <button class="btn-edit-session" data-id="${session.id}">Editar</button>
+          <div class="session-row-actions">
+            <button class="btn-edit-session" data-id="${session.id}">Editar</button>
+            <button class="btn-delete-session" data-id="${session.id}" aria-label="Eliminar sessió">✕</button>
+          </div>
         `;
         div.querySelector('.btn-edit-session').addEventListener('click', () => openEditSessionModal(session.id));
+        div.querySelector('.btn-delete-session').addEventListener('click', () => deleteSession(session.id, dateStr));
         els.dayDetailSessions.appendChild(div);
       });
   }
@@ -603,6 +728,38 @@ function selectDay(dateStr, dayData) {
 function hideDayDetail() {
   els.dayDetail.classList.remove('open');
   selectedDayStr = null;
+}
+
+function deleteSession(sessionId, dateStr) {
+  const idx = state.sessions.findIndex(s => s.id === sessionId);
+  if (idx === -1) return;
+
+  const session = state.sessions[idx];
+  const sDateStr = dateStr || new Date(session.startTime).toISOString().split('T')[0];
+
+  // Subtract from daily totals
+  if (state.dailyGoals[sDateStr]) {
+    state.dailyGoals[sDateStr].totalSeconds = Math.max(
+      0, state.dailyGoals[sDateStr].totalSeconds - session.duration
+    );
+    state.dailyGoals[sDateStr].goalMet =
+      state.dailyGoals[sDateStr].totalSeconds >= FOCUS_DURATION ? 1 : 0;
+  }
+
+  state.sessions.splice(idx, 1);
+  recalculateStreaks();
+  renderCalendar();
+
+  // Refresh the day detail panel for the same day
+  const sessionsForDay = state.sessions.filter(
+    s => new Date(s.startTime).toISOString().split('T')[0] === sDateStr
+  );
+  const totalSeconds = sessionsForDay.reduce((sum, s) => sum + s.duration, 0);
+  if (sessionsForDay.length > 0) {
+    selectDay(sDateStr, { sessions: sessionsForDay, totalSeconds });
+  } else {
+    hideDayDetail();
+  }
 }
 
 function openEditSessionModal(sessionId) {
