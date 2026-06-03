@@ -28,7 +28,10 @@
       <!-- Header -->
       <header class="home-header">
         <div>
-          <h1 class="logo">fitxa</h1>
+          <div class="logo-wrap">
+            <img src="icons/panda.png" class="logo-panda" alt="Fitxa panda" />
+            <h1 class="logo">fitxa</h1>
+          </div>
           <p class="date" id="today-date"></p>
         </div>
         <div class="header-right">
@@ -89,16 +92,19 @@
 
       <!-- Paused session card -->
       <div class="paused-card" id="paused-card" style="display:none">
-        <div class="paused-left">
-          <span class="paused-icon">⏸</span>
-          <div class="paused-info">
-            <span class="paused-task-name" id="paused-task-name"></span>
-            <span class="paused-time-label" id="paused-time-label"></span>
+        <div class="paused-card-top">
+          <div class="paused-badge"><span>⏸</span> En pausa</div>
+          <span class="paused-task-name" id="paused-task-name"></span>
+        </div>
+        <div class="paused-progress-wrap">
+          <div class="paused-progress-bar">
+            <div class="paused-progress-fill" id="paused-progress-fill"></div>
           </div>
+          <span class="paused-time-label" id="paused-time-label"></span>
         </div>
         <div class="paused-actions">
-          <button class="btn-end-paused" id="btn-end-paused">Acabar</button>
-          <button class="btn-resume" id="btn-resume">▶ Continuar</button>
+          <button class="btn-end-paused" id="btn-end-paused">Acabar sessió</button>
+          <button class="btn-resume" id="btn-resume">▶&nbsp;Continuar</button>
         </div>
       </div>
 
@@ -238,6 +244,19 @@
         <div class="modal-actions">
           <button class="btn-cancel" id="btn-cancel-edit">Cancel·lar</button>
           <button class="btn-save" id="btn-save-session">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Confirmar Eliminació -->
+    <div class="modal-overlay" id="modal-confirm-delete">
+      <div class="modal-content">
+        <div class="confirm-icon">🗑️</div>
+        <h3 class="modal-title">Eliminar sessió?</h3>
+        <p class="modal-subtitle" id="confirm-delete-desc"></p>
+        <div class="modal-actions">
+          <button class="btn-cancel" id="btn-cancel-delete">Cancel·lar</button>
+          <button class="btn-delete-confirm" id="btn-confirm-delete">Eliminar</button>
         </div>
       </div>
     </div>

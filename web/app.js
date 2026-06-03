@@ -45,6 +45,7 @@ const els = {
   pausedCard: document.getElementById('paused-card'),
   pausedTaskName: document.getElementById('paused-task-name'),
   pausedTimeLabel: document.getElementById('paused-time-label'),
+  pausedProgressFill: document.getElementById('paused-progress-fill'),
   btnResume: document.getElementById('btn-resume'),
   btnEndPaused: document.getElementById('btn-end-paused'),
   
@@ -84,6 +85,12 @@ const els = {
   editSessionTime: document.getElementById('edit-session-time'),
   btnCancelEdit: document.getElementById('btn-cancel-edit'),
   btnSaveSession: document.getElementById('btn-save-session'),
+
+  // Delete confirm modal
+  modalConfirmDelete: document.getElementById('modal-confirm-delete'),
+  confirmDeleteDesc: document.getElementById('confirm-delete-desc'),
+  btnCancelDelete: document.getElementById('btn-cancel-delete'),
+  btnConfirmDelete: document.getElementById('btn-confirm-delete'),
 };
 
 // ─── Initialization ──────────────────────────────────────────
@@ -239,6 +246,8 @@ function renderHome() {
     els.pausedTaskName.textContent = pausedSession.taskName;
     const elapsed = pausedSession.elapsedSeconds;
     const remaining = pausedSession.targetDuration - elapsed;
+    const pct = Math.min((elapsed / pausedSession.targetDuration) * 100, 100);
+    els.pausedProgressFill.style.width = pct + '%';
     const em = Math.floor(elapsed / 60), es = elapsed % 60;
     const rm = Math.floor(remaining / 60), rs = remaining % 60;
     els.pausedTimeLabel.textContent =
@@ -343,6 +352,10 @@ function bindEvents() {
   // Edit Session Modal
   els.btnCancelEdit.addEventListener('click', () => els.modalEditSession.classList.remove('active'));
   els.btnSaveSession.addEventListener('click', saveSessionEdit);
+
+  // Delete Confirm Modal
+  els.btnCancelDelete.addEventListener('click', () => els.modalConfirmDelete.classList.remove('active'));
+  els.btnConfirmDelete.addEventListener('click', confirmDeleteSession);
 }
 
 function validateInput() {
@@ -730,14 +743,33 @@ function hideDayDetail() {
   selectedDayStr = null;
 }
 
+let pendingDeleteId = null;
+let pendingDeleteDateStr = null;
+
 function deleteSession(sessionId, dateStr) {
+  const session = state.sessions.find(s => s.id === sessionId);
+  if (!session) return;
+  pendingDeleteId = sessionId;
+  pendingDeleteDateStr = dateStr || new Date(session.startTime).toISOString().split('T')[0];
+  const mins = Math.round(session.duration / 60);
+  const time = new Date(session.startTime).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+  els.confirmDeleteDesc.textContent = `"${session.taskName}" — ${time} · ${mins} min`;
+  els.modalConfirmDelete.classList.add('active');
+}
+
+function confirmDeleteSession() {
+  if (!pendingDeleteId) return;
+  const sessionId = pendingDeleteId;
+  const sDateStr  = pendingDeleteDateStr;
+  pendingDeleteId = null;
+  pendingDeleteDateStr = null;
+  els.modalConfirmDelete.classList.remove('active');
+
   const idx = state.sessions.findIndex(s => s.id === sessionId);
   if (idx === -1) return;
-
   const session = state.sessions[idx];
-  const sDateStr = dateStr || new Date(session.startTime).toISOString().split('T')[0];
 
-  // Subtract from daily totals
+  // Update daily totals
   if (state.dailyGoals[sDateStr]) {
     state.dailyGoals[sDateStr].totalSeconds = Math.max(
       0, state.dailyGoals[sDateStr].totalSeconds - session.duration
@@ -750,7 +782,7 @@ function deleteSession(sessionId, dateStr) {
   recalculateStreaks();
   renderCalendar();
 
-  // Refresh the day detail panel for the same day
+  // Refresh day detail or close it
   const sessionsForDay = state.sessions.filter(
     s => new Date(s.startTime).toISOString().split('T')[0] === sDateStr
   );
