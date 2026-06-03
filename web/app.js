@@ -1,5 +1,5 @@
 // ─── Constants & State ───────────────────────────────────────
-const FOCUS_DURATION = 90 * 60; // 90 minutes in seconds
+const FOCUS_DURATION = 5 * 60 * 60; // 5 hours in seconds
 const DEFAULT_CHIPS = ['Deep Work', 'Codi', 'Lectura', 'Disseny', 'Planificació', 'Escriptura'];
 
 let state = {
@@ -15,6 +15,8 @@ let activeSession = null;
 let timerInterval = null;
 let currentTaskName = '';
 let editingSessionId = null;
+let calendarDate = new Date(); // currently displayed month
+let selectedDayStr = null;    // 'YYYY-MM-DD' of tapped day
 
 // ─── DOM Elements ────────────────────────────────────────────
 const els = {
@@ -52,9 +54,16 @@ const els = {
   btnDone: document.getElementById('btn-done'),
   timerContainer: document.querySelector('.timer-container'),
 
-  // History
+  // History / Calendar
   btnBackHistory: document.getElementById('btn-back-history'),
-  historyList: document.getElementById('history-list'),
+  calPrev: document.getElementById('cal-prev'),
+  calNext: document.getElementById('cal-next'),
+  calMonthLabel: document.getElementById('cal-month-label'),
+  calGrid: document.getElementById('cal-grid'),
+  dayDetail: document.getElementById('day-detail'),
+  dayDetailDate: document.getElementById('day-detail-date'),
+  dayDetailTotal: document.getElementById('day-detail-total'),
+  dayDetailSessions: document.getElementById('day-detail-sessions'),
 
   // Modals
   modalChips: document.getElementById('modal-chips'),
@@ -253,8 +262,25 @@ function bindEvents() {
   els.btnStop.addEventListener('click', () => endSession(0));
   els.btnDone.addEventListener('click', finishSession);
 
-  // History
-  els.btnBackHistory.addEventListener('click', () => showScreen('home'));
+  // History / Calendar
+  els.btnBackHistory.addEventListener('click', () => {
+    hideDayDetail();
+    showScreen('home');
+  });
+  els.calPrev.addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() - 1);
+    renderCalendar();
+  });
+  els.calNext.addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() + 1);
+    renderCalendar();
+  });
+  // Close day detail when tapping outside the panel
+  document.getElementById('screen-history').addEventListener('click', (e) => {
+    if (!els.dayDetail.contains(e.target) && !e.target.closest('.cal-day')) {
+      hideDayDetail();
+    }
+  });
 
   // Edit Chips Modal
   els.btnEditChips.addEventListener('click', openChipsModal);
@@ -396,10 +422,11 @@ function endSession(completed, showCompletionCard = false) {
     els.focusStreakPill.style.display = 'none';
     els.completionCard.style.display = 'block';
     
+    const durationMins = Math.round(duration / 60);
     if (state.dailyGoals[today].goalMet) {
-      els.completionText.innerHTML = '90 minuts de focus profund completats.<br/><strong>Meta diària assolida! 🔥</strong>';
+      els.completionText.innerHTML = `${durationMins} minuts de focus completats.<br/><strong>Meta diària assolida! 🔥</strong>`;
     } else {
-      els.completionText.textContent = '90 minuts de focus profund completats.';
+      els.completionText.textContent = `${durationMins} minuts de focus completats.`;
     }
   } else {
     showScreen('home');
@@ -451,63 +478,131 @@ function addChip() {
   }
 }
 
-// History & Edit Session
+// ─── Calendar ────────────────────────────────────────────────
 function renderHistory() {
-  els.historyList.innerHTML = '';
-  
-  if (state.sessions.length === 0) {
-    els.historyList.innerHTML = '<div class="empty-history">Encara no hi ha sessions guardades.</div>';
-    return;
+  calendarDate = new Date();
+  selectedDayStr = null;
+  hideDayDetail();
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const year  = calendarDate.getFullYear();
+  const month = calendarDate.getMonth(); // 0-indexed
+
+  // Header label
+  els.calMonthLabel.textContent = new Date(year, month, 1)
+    .toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })
+    .replace(/^./, c => c.toUpperCase());
+
+  // Prevent navigating to future months
+  const now = new Date();
+  els.calNext.disabled = (year === now.getFullYear() && month >= now.getMonth());
+  els.calNext.style.opacity = els.calNext.disabled ? '0.25' : '1';
+
+  // Build sessions index by date
+  const sessionsPerDay = {};
+  state.sessions.forEach(s => {
+    const d = new Date(s.startTime).toISOString().split('T')[0];
+    if (!sessionsPerDay[d]) sessionsPerDay[d] = { sessions: [], totalSeconds: 0 };
+    sessionsPerDay[d].sessions.push(s);
+    sessionsPerDay[d].totalSeconds += s.duration;
+  });
+
+  // First day of month (0=Sun … 6=Sat). Convert to Mon-start (0=Mon).
+  const firstDay = new Date(year, month, 1);
+  let startOffset = firstDay.getDay() - 1; // Mon = 0
+  if (startOffset < 0) startOffset = 6;    // Sunday correction
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = getTodayString();
+
+  els.calGrid.innerHTML = '';
+
+  // Empty leading cells
+  for (let i = 0; i < startOffset; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'cal-day cal-day--empty';
+    els.calGrid.appendChild(empty);
   }
 
-  // Group by date
-  const groups = {};
-  state.sessions.forEach(session => {
-    const dateStr = new Date(session.startTime).toISOString().split('T')[0];
-    if (!groups[dateStr]) groups[dateStr] = { sessions: [], totalSeconds: 0 };
-    groups[dateStr].sessions.push(session);
-    groups[dateStr].totalSeconds += session.duration;
-  });
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayData  = sessionsPerDay[dateStr];
+    const goalData = state.dailyGoals[dateStr];
+    const goalMet  = goalData?.goalMet;
+    const hasSess  = !!dayData;
+    const isToday  = dateStr === todayStr;
+    const isFuture = dateStr > todayStr;
+    const isSelected = dateStr === selectedDayStr;
 
-  const sortedDates = Object.keys(groups).sort().reverse();
+    const cell = document.createElement('button');
+    cell.className = [
+      'cal-day',
+      goalMet  ? 'cal-day--fire'     : '',
+      hasSess && !goalMet ? 'cal-day--partial' : '',
+      isToday  ? 'cal-day--today'    : '',
+      isFuture ? 'cal-day--future'   : '',
+      isSelected ? 'cal-day--selected' : ''
+    ].join(' ').trim();
+    cell.dataset.date = dateStr;
+    cell.disabled = isFuture;
 
-  sortedDates.forEach(dateStr => {
-    const group = groups[dateStr];
-    const dateObj = new Date(dateStr);
-    const dateFormatted = dateObj.toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short' });
-    const totalMinutes = Math.round(group.totalSeconds / 60);
-
-    const dayDiv = document.createElement('div');
-    dayDiv.className = 'history-day';
-    
-    dayDiv.innerHTML = `
-      <div class="history-day-header">
-        <span class="history-day-date">${dateFormatted}</span>
-        <span class="history-day-total">${totalMinutes} min total</span>
-      </div>
+    // Inner HTML: number + optional fire badge
+    cell.innerHTML = `
+      <span class="cal-day-num">${d}</span>
+      ${goalMet ? '<span class="cal-fire">🔥</span>' : ''}
+      ${hasSess && !goalMet ? '<span class="cal-dot"></span>' : ''}
     `;
 
-    // Sort sessions within day by time descending
-    group.sessions.sort((a, b) => b.startTime - a.startTime).forEach(session => {
-      const timeFormatted = new Date(session.startTime).toLocaleTimeString('ca-ES', { hour: '2-digit', minute:'2-digit' });
-      const durationMins = Math.round(session.duration / 60);
-      
-      const sessDiv = document.createElement('div');
-      sessDiv.className = 'history-session';
-      sessDiv.innerHTML = `
-        <div class="history-session-left">
-          <span class="history-session-task">${session.taskName}</span>
-          <span class="history-session-time">${timeFormatted} &bull; ${durationMins} min ${session.completed ? '🎯' : ''}</span>
-        </div>
-        <button class="btn-edit-session" data-id="${session.id}">Editar</button>
-      `;
-      
-      sessDiv.querySelector('.btn-edit-session').addEventListener('click', () => openEditSessionModal(session.id));
-      dayDiv.appendChild(sessDiv);
-    });
+    cell.addEventListener('click', () => selectDay(dateStr, dayData));
+    els.calGrid.appendChild(cell);
+  }
+}
 
-    els.historyList.appendChild(dayDiv);
-  });
+function selectDay(dateStr, dayData) {
+  selectedDayStr = dateStr;
+  renderCalendar(); // re-render to show selected state
+
+  const dateObj = new Date(dateStr + 'T12:00:00');
+  const dateFormatted = dateObj.toLocaleDateString('ca-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  els.dayDetailDate.textContent = dateFormatted.replace(/^./, c => c.toUpperCase());
+
+  if (!dayData || dayData.sessions.length === 0) {
+    els.dayDetailTotal.textContent = '';
+    els.dayDetailSessions.innerHTML = '<p class="day-detail-empty">Cap sessió enregistrada.</p>';
+  } else {
+    const totalMins = Math.round(dayData.totalSeconds / 60);
+    const goalMet = state.dailyGoals[dateStr]?.goalMet;
+    els.dayDetailTotal.textContent = `${totalMins} min${goalMet ? ' 🔥' : ''}`;
+
+    els.dayDetailSessions.innerHTML = '';
+    dayData.sessions
+      .sort((a, b) => a.startTime - b.startTime)
+      .forEach(session => {
+        const timeFormatted = new Date(session.startTime).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+        const durationMins  = Math.round(session.duration / 60);
+        const div = document.createElement('div');
+        div.className = 'history-session';
+        div.innerHTML = `
+          <div class="history-session-left">
+            <span class="history-session-task">${session.taskName}</span>
+            <span class="history-session-time">${timeFormatted} • ${durationMins} min ${session.completed ? '🎯' : ''}</span>
+          </div>
+          <button class="btn-edit-session" data-id="${session.id}">Editar</button>
+        `;
+        div.querySelector('.btn-edit-session').addEventListener('click', () => openEditSessionModal(session.id));
+        els.dayDetailSessions.appendChild(div);
+      });
+  }
+
+  els.dayDetail.classList.add('open');
+}
+
+function hideDayDetail() {
+  els.dayDetail.classList.remove('open');
+  selectedDayStr = null;
 }
 
 function openEditSessionModal(sessionId) {
@@ -544,7 +639,13 @@ function saveSessionEdit() {
   }
   
   recalculateStreaks();
-  renderHistory();
+  renderCalendar();
+  if (selectedDayStr) {
+    // Rebuild dayData for the re-opened panel
+    const sessionsForDay = state.sessions.filter(s => new Date(s.startTime).toISOString().split('T')[0] === selectedDayStr);
+    const totalSeconds = sessionsForDay.reduce((sum, s) => sum + s.duration, 0);
+    selectDay(selectedDayStr, sessionsForDay.length ? { sessions: sessionsForDay, totalSeconds } : null);
+  }
   els.modalEditSession.classList.remove('active');
   editingSessionId = null;
 }
