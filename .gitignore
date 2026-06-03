@@ -1,0 +1,46 @@
+# .gitignore per a Fitxa (React Native + Expo)
+
+# Dependències
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Variables d'entorn sensibles
+.env
+.env.local
+.env.*.local
+
+# iOS
+ios/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Android
+android/
+*.keystore
+
+# macOS
+.DS_Store
+*.pem
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Base de dades local (no s'ha de versionar)
+*.db
+*.sqlite

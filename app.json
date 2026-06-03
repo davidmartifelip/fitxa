@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Fitxa",
+    "slug": "fitxa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.davidmarti.fitxa",
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "Fitxa llegeix el teu Google Calendar per mostrar els events del dia.",
+        "NSCalendarsFullAccessUsageDescription": "Fitxa necessita accés al calendari per mostrar els events i vincular sessions de focus."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#0A0A0F"
+      },
+      "package": "com.davidmarti.fitxa"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "fitxa",
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Fitxa" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <meta name="description" content="90 minuts de focus profund cada dia." />
+
+  <title>Fitxa — Focus Timer</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── HOME SCREEN ─────────────────────────────────────── -->
+    <div id="screen-home" class="screen active">
+      <div class="safe-top"></div>
+
+      <!-- Header -->
+      <header class="home-header">
+        <div>
+          <h1 class="logo">fitxa</h1>
+          <p class="date" id="today-date"></p>
+        </div>
+        <div class="header-right">
+          <div class="streak-badge" id="streak-badge">
+            <span class="streak-flame">🔥</span>
+            <span class="streak-count" id="streak-count">0</span>
+            <div class="streak-meta">
+              <div class="streak-progress-bar">
+                <div class="streak-progress-fill" id="streak-fill"></div>
+              </div>
+              <span class="streak-label" id="streak-label">0% avui</span>
+            </div>
+          </div>
+          <button class="btn-icon" id="btn-open-history" aria-label="Obrir historial">🗓️</button>
+        </div>
+      </header>
+
+      <!-- Hero text -->
+      <div class="hero">
+        <h2 class="hero-title">En què et vols<br/>enfocar avui?</h2>
+        <p class="hero-sub" id="hero-sub">90 minuts de focus profund.</p>
+      </div>
+
+      <!-- Task input -->
+      <div class="input-group">
+        <input
+          type="text"
+          id="task-input"
+          class="task-input"
+          placeholder="Nom de la tasca..."
+          maxlength="80"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <!-- Quick chips -->
+      <div class="chips-wrapper">
+        <div class="chips" id="chips">
+          <!-- Els chips s'injecten aquí via JS -->
+        </div>
+        <button class="btn-edit-chips" id="btn-edit-chips">+ Editar opcions</button>
+      </div>
+
+      <!-- Duration input -->
+      <div class="input-group">
+        <input
+          type="number"
+          id="duration-input"
+          class="task-input"
+          placeholder="Durada en minuts (ex: 45)"
+          min="1"
+          max="999"
+          value="90"
+        />
+      </div>
+
+      <!-- Start button -->
+      <button class="btn-start" id="btn-start" disabled>
+        Escriu el nom de la tasca
+      </button>
+
+      <!-- Stats -->
+      <div class="stats-row" id="stats-row" style="display:none">
+        <div class="stat">
+          <span class="stat-value" id="stat-streak">0</span>
+          <span class="stat-label">Dies de ratxa</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-value" id="stat-best">0</span>
+          <span class="stat-label">Millor ratxa</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-value" id="stat-today">0</span>
+          <span class="stat-label">Min avui</span>
+        </div>
+      </div>
+
+      <div class="safe-bottom"></div>
+    </div>
+
+    <!-- ── FOCUS SCREEN ────────────────────────────────────── -->
+    <div id="screen-focus" class="screen">
+      <div class="safe-top"></div>
+
+      <button class="btn-back" id="btn-back" aria-label="Enrere">←</button>
+
+      <div class="task-header">
+        <p class="focusing-label">Enfocant en</p>
+        <h2 class="task-name" id="focus-task-name"></h2>
+      </div>
+
+      <!-- Ring timer -->
+      <div class="timer-container">
+        <svg class="timer-ring" viewBox="0 0 240 240" aria-hidden="true">
+          <circle class="ring-track" cx="120" cy="120" r="108" />
+          <circle class="ring-progress" id="ring-progress" cx="120" cy="120" r="108" />
+        </svg>
+        <div class="timer-inner" id="timer-inner">
+          <span class="timer-time" id="timer-time">90:00</span>
+          <span class="timer-label">restants</span>
+        </div>
+      </div>
+
+      <!-- Streak pill -->
+      <div class="streak-pill" id="focus-streak-pill">
+        <span>🔥</span>
+        <span id="focus-streak-text">Inicia la teva ratxa avui</span>
+      </div>
+
+      <!-- Stop button -->
+      <button class="btn-stop" id="btn-stop">Atura la sessió</button>
+
+      <!-- Completion card (hidden until done) -->
+      <div class="completion-card" id="completion-card" style="display:none">
+        <div class="completion-emoji">🎯</div>
+        <h3 class="completion-title">Sessió completada!</h3>
+        <p class="completion-text" id="completion-text">90 minuts de focus profund completats.</p>
+        <button class="btn-done" id="btn-done">Finalitzar</button>
+      </div>
+
+      <div class="safe-bottom"></div>
+    </div>
+
+    <!-- ── HISTORY SCREEN ──────────────────────────────────── -->
+    <div id="screen-history" class="screen">
+      <div class="safe-top"></div>
+
+      <header class="history-header">
+        <button class="btn-back" id="btn-back-history" aria-label="Enrere">←</button>
+        <h2 class="history-title">El teu Historial</h2>
+      </header>
+
+      <div id="history-list" class="history-list">
+        <!-- History generated by JS -->
+      </div>
+
+      <div class="safe-bottom"></div>
+    </div>
+
+    <!-- ── MODALS ──────────────────────────────────────────── -->
+    <!-- Modal: Editar Chips -->
+    <div class="modal-overlay" id="modal-chips">
+      <div class="modal-content">
+        <h3 class="modal-title">Editar etiquetes ràpides</h3>
+        
+        <div class="add-chip-row">
+          <input type="text" id="new-chip-input" class="modal-input" placeholder="Nova etiqueta..." maxlength="25" />
+          <button class="btn-add-chip" id="btn-add-chip">Afegir</button>
+        </div>
+
+        <ul class="chip-edit-list" id="chip-edit-list">
+          <!-- Editable chips via JS -->
+        </ul>
+
+        <button class="btn-close-modal" id="btn-close-chips-modal">Tancar</button>
+      </div>
+    </div>
+
+    <!-- Modal: Editar Sessió -->
+    <div class="modal-overlay" id="modal-edit-session">
+      <div class="modal-content">
+        <h3 class="modal-title">Editar temps (minuts)</h3>
+        <p class="modal-subtitle" id="edit-session-task-name"></p>
+        
+        <input type="number" id="edit-session-time" class="modal-input number-input" min="0" max="999" />
+        
+        <div class="modal-actions">
+          <button class="btn-cancel" id="btn-cancel-edit">Cancel·lar</button>
+          <button class="btn-save" id="btn-save-session">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
