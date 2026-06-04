@@ -1,5 +1,17 @@
 // ─── Constants & State ───────────────────────────────────────
-const FOCUS_DURATION = 5 * 60 * 60; // 5 hours in seconds
+const STANDARD_GOAL = 90 * 60; // 90 min in seconds
+const REST_GOAL = 5 * 60 * 60; // 5 hours in seconds
+
+function isRestDayString(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dayOfWeek = new Date(y, m - 1, d).getDay();
+  return dayOfWeek === 5 || dayOfWeek === 6; // Friday = 5, Saturday = 6
+}
+
+function getGoalThreshold(dateStr) {
+  return isRestDayString(dateStr) ? REST_GOAL : STANDARD_GOAL;
+}
+
 const DEFAULT_CHIPS = ['Deep Work', 'Codi', 'Lectura', 'Disseny', 'Planificació', 'Escriptura'];
 
 let state = {
@@ -149,6 +161,13 @@ function saveState() {
 function updateDate() {
   const opts = { weekday: 'long', day: 'numeric', month: 'long' };
   els.todayDate.textContent = new Date().toLocaleDateString('ca-ES', opts);
+
+  const todayStr = getTodayString();
+  const goalText = isRestDayString(todayStr) ? '5 hores' : '90 minuts';
+  const heroSub = document.getElementById('hero-sub');
+  if (heroSub) {
+    heroSub.textContent = `${goalText} de focus profund avui.`;
+  }
 }
 
 function getTodayString() {
@@ -156,44 +175,58 @@ function getTodayString() {
 }
 
 function recalculateStreaks() {
-  const dates = Object.keys(state.dailyGoals).sort().reverse();
+  const todayStr = getTodayString();
   
-  let current = 0;
+  // Generate all date strings for the last 365 days, sorted ascending
+  const datesAsc = [];
+  const todayDate = new Date();
+  for (let i = 365; i >= 0; i--) {
+    const d = new Date(todayDate);
+    d.setDate(d.getDate() - i);
+    datesAsc.push(d.toISOString().split('T')[0]);
+  }
+
   let longest = 0;
   let running = 0;
-  
-  const todayStr = getTodayString();
-  const todayMet = state.dailyGoals[todayStr]?.goalMet;
-  
-  dates.forEach(date => {
-    if (state.dailyGoals[date].goalMet) {
-      running++;
-      if (running > longest) longest = running;
+
+  for (let i = 0; i < datesAsc.length; i++) {
+    const dateStr = datesAsc[i];
+    const goal = state.dailyGoals[dateStr];
+    const seconds = goal ? goal.totalSeconds : 0;
+    
+    const isRest = isRestDayString(dateStr);
+    const threshold = isRest ? REST_GOAL : STANDARD_GOAL;
+    const isToday = (i === datesAsc.length - 1);
+    
+    const goalMet = seconds >= threshold;
+    if (goal) {
+      goal.goalMet = goalMet ? 1 : 0;
+    }
+
+    if (isRest) {
+      if (goalMet) {
+        running++;
+        if (running > longest) longest = running;
+      } else {
+        // Rest day (Friday/Saturday) with less than 5h.
+        // Streak doesn't break, but doesn't increment.
+      }
     } else {
-      running = 0;
-    }
-  });
-  state.longestStreak = longest;
-  
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-  
-  if (todayMet) {
-    current = 1;
-    let d = new Date(yesterday);
-    while (state.dailyGoals[d.toISOString().split('T')[0]]?.goalMet) {
-      current++;
-      d.setDate(d.getDate() - 1);
-    }
-  } else if (state.dailyGoals[yesterdayStr]?.goalMet) {
-    let d = new Date(yesterday);
-    while (state.dailyGoals[d.toISOString().split('T')[0]]?.goalMet) {
-      current++;
-      d.setDate(d.getDate() - 1);
+      if (goalMet) {
+        running++;
+        if (running > longest) longest = running;
+      } else {
+        if (isToday) {
+          // Today is in progress, do not break streak
+        } else {
+          running = 0;
+        }
+      }
     }
   }
-  state.currentStreak = current;
+
+  state.longestStreak = longest;
+  state.currentStreak = running;
   state.todayFocusSeconds = state.dailyGoals[todayStr]?.totalSeconds || 0;
   
   saveState();
@@ -218,7 +251,9 @@ function showScreen(screenName) {
 
 function renderHome() {
   els.streakCount.textContent = state.currentStreak;
-  const progress = Math.min(state.todayFocusSeconds / FOCUS_DURATION, 1);
+  const todayStr = getTodayString();
+  const threshold = getGoalThreshold(todayStr);
+  const progress = Math.min(state.todayFocusSeconds / threshold, 1);
   els.streakFill.style.width = `${progress * 100}%`;
   
   if (progress >= 1) {
@@ -459,7 +494,12 @@ function endPausedSession() {
 
   if (!state.dailyGoals[dateStr]) state.dailyGoals[dateStr] = { totalSeconds: 0, goalMet: 0 };
   state.dailyGoals[dateStr].totalSeconds += duration;
-  if (state.dailyGoals[dateStr].totalSeconds >= FOCUS_DURATION) state.dailyGoals[dateStr].goalMet = 1;
+  const threshold = getGoalThreshold(dateStr);
+  if (state.dailyGoals[dateStr].totalSeconds >= threshold) {
+    state.dailyGoals[dateStr].goalMet = 1;
+  } else {
+    state.dailyGoals[dateStr].goalMet = 0;
+  }
 
   pausedSession = null;
   localStorage.removeItem('fitxa_paused_session');
@@ -542,8 +582,11 @@ function endSession(completed, showCompletionCard = false) {
     state.dailyGoals[today] = { totalSeconds: 0, goalMet: 0 };
   }
   state.dailyGoals[today].totalSeconds += duration;
-  if (state.dailyGoals[today].totalSeconds >= FOCUS_DURATION) {
+  const threshold = getGoalThreshold(today);
+  if (state.dailyGoals[today].totalSeconds >= threshold) {
     state.dailyGoals[today].goalMet = 1;
+  } else {
+    state.dailyGoals[today].goalMet = 0;
   }
   
   activeSession = null;
@@ -671,9 +714,12 @@ function renderCalendar() {
     const isFuture = dateStr > todayStr;
     const isSelected = dateStr === selectedDayStr;
 
+    const isRest = isRestDayString(dateStr);
+
     const cell = document.createElement('button');
     cell.className = [
       'cal-day',
+      isRest   ? 'cal-day--rest'     : '',
       goalMet  ? 'cal-day--fire'     : '',
       hasSess && !goalMet ? 'cal-day--partial' : '',
       isToday  ? 'cal-day--today'    : '',
@@ -775,7 +821,7 @@ function confirmDeleteSession() {
       0, state.dailyGoals[sDateStr].totalSeconds - session.duration
     );
     state.dailyGoals[sDateStr].goalMet =
-      state.dailyGoals[sDateStr].totalSeconds >= FOCUS_DURATION ? 1 : 0;
+      state.dailyGoals[sDateStr].totalSeconds >= getGoalThreshold(sDateStr) ? 1 : 0;
   }
 
   state.sessions.splice(idx, 1);
@@ -824,7 +870,7 @@ function saveSessionEdit() {
   const dateStr = new Date(session.startTime).toISOString().split('T')[0];
   if (state.dailyGoals[dateStr]) {
     state.dailyGoals[dateStr].totalSeconds = Math.max(0, state.dailyGoals[dateStr].totalSeconds - oldDuration + newDuration);
-    state.dailyGoals[dateStr].goalMet = state.dailyGoals[dateStr].totalSeconds >= FOCUS_DURATION ? 1 : 0;
+    state.dailyGoals[dateStr].goalMet = state.dailyGoals[dateStr].totalSeconds >= getGoalThreshold(dateStr) ? 1 : 0;
   }
   
   recalculateStreaks();

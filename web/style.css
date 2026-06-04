@@ -646,6 +646,14 @@ html, body {
   box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
+.cal-day--rest:not(.cal-day--fire) {
+  background: rgba(108, 99, 255, 0.04);
+  border: 1.5px dashed rgba(108, 99, 255, 0.25);
+}
+.cal-day--rest:not(.cal-day--fire) .cal-day-num {
+  color: var(--text-sec);
+}
+
 /* Fire (goal met) day */
 .cal-day--fire {
   background: rgba(255,100,20,0.15);

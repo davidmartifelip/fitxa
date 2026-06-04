@@ -61,12 +61,18 @@ export async function finalizeSession(
     [today, duration]
   );
 
-  // Mark goal as met if ≥ 5400 seconds (90 min) of total focus today
+  // Mark goal as met dynamically based on the day of the week
+  const [year, month, day] = today.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  const dayOfWeek = d.getDay();
+  const isRest = dayOfWeek === 5 || dayOfWeek === 6;
+  const threshold = isRest ? 18000 : 5400;
+
   await db.runAsync(
     `UPDATE daily_goals
-     SET goal_met = CASE WHEN total_focus_seconds >= 5400 THEN 1 ELSE 0 END
+     SET goal_met = CASE WHEN total_focus_seconds >= ? THEN 1 ELSE 0 END
      WHERE date = ?`,
-    [today]
+    [threshold, today]
   );
 }
 

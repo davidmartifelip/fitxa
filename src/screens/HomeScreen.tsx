@@ -32,6 +32,10 @@ export function HomeScreen() {
     month: 'long',
   });
 
+  const todayDateObj = new Date();
+  const isTodayRest = todayDateObj.getDay() === 5 || todayDateObj.getDay() === 6;
+  const goalText = isTodayRest ? '5 hores' : '90 minuts';
+
   const canStart = taskName.trim().length > 0;
 
   const handleStart = () => {
@@ -78,7 +82,7 @@ export function HomeScreen() {
           <View style={styles.hero}>
             <Text style={styles.heroTitle}>En què et vols{'\n'}enfocar avui?</Text>
             <Text style={styles.heroSub}>
-              90 minuts de focus profund.{streak.currentStreak > 0 ? ` Ratxa: ${streak.currentStreak} dies 🔥` : ' Comença la teva ratxa.'}
+              {goalText} de focus profund.{streak.currentStreak > 0 ? ` Ratxa: ${streak.currentStreak} dies 🔥` : ' Comença la teva ratxa.'}
             </Text>
           </View>
 

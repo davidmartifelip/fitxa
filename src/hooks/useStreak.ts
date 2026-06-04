@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDailyGoals, getTodayFocusSeconds } from '../db/sessionRepository';
 import type { DailyGoal } from '../db/sessionRepository';
+import { toDateString } from '../utils/dateHelpers';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,48 +37,68 @@ export function useStreak(): StreakState {
       ]);
 
       setTodayFocusSeconds(todaySeconds);
-      setTodayGoalMet(todaySeconds >= DAILY_GOAL_SECONDS);
 
-      // Build a set of dates where goal was met
-      const goalMetDates = new Set(
-        goals.filter((g) => g.goal_met === 1).map((g) => g.date)
-      );
+      // Determine today's target
+      const todayStr = toDateString();
+      const [year, month, day] = todayStr.split('-').map(Number);
+      const todayD = new Date(year, month - 1, day);
+      const isTodayRest = todayD.getDay() === 5 || todayD.getDay() === 6;
+      const todayThreshold = isTodayRest ? 18000 : DAILY_GOAL_SECONDS;
+      setTodayGoalMet(todaySeconds >= todayThreshold);
 
-      // Calculate current streak (consecutive days ending today or yesterday)
-      let current = 0;
-      const today = new Date();
-      for (let i = 0; i < 365; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-
-        // Today might not be counted yet (in progress)
-        if (i === 0 && !goalMetDates.has(dateStr)) {
-          // Only break streak if yesterday is also missing
-          continue;
-        }
-
-        if (goalMetDates.has(dateStr)) {
-          current++;
-        } else {
-          break;
-        }
+      // Build a map of date string to total focus seconds
+      const focusSecondsMap = new Map<string, number>();
+      for (const g of goals) {
+        focusSecondsMap.set(g.date, g.total_focus_seconds);
       }
-      setCurrentStreak(current);
 
-      // Calculate longest streak
+      // Generate all date strings for the last 365 days, sorted ascending
+      const datesAsc: string[] = [];
+      const todayDate = new Date();
+      for (let i = 365; i >= 0; i--) {
+        const dateD = new Date(todayDate);
+        dateD.setDate(dateD.getDate() - i);
+        datesAsc.push(dateD.toISOString().split('T')[0]);
+      }
+
       let longest = 0;
       let running = 0;
-      // Sort goals ascending by date
-      const sorted = [...goals].sort((a, b) => a.date.localeCompare(b.date));
-      for (let i = 0; i < sorted.length; i++) {
-        if (sorted[i].goal_met === 1) {
-          running++;
-          if (running > longest) longest = running;
+
+      for (let i = 0; i < datesAsc.length; i++) {
+        const dateStr = datesAsc[i];
+        const seconds = focusSecondsMap.get(dateStr) || 0;
+        
+        const [y, m, dayNum] = dateStr.split('-').map(Number);
+        const cellDate = new Date(y, m - 1, dayNum);
+        const isRest = cellDate.getDay() === 5 || cellDate.getDay() === 6;
+        const threshold = isRest ? 18000 : 5400; // 5 hours (18000s) or 90 minutes (5400s)
+        
+        const isToday = (i === datesAsc.length - 1);
+        const goalMet = seconds >= threshold;
+
+        if (isRest) {
+          if (goalMet) {
+            running++;
+            if (running > longest) longest = running;
+          } else {
+            // Rest day (Friday/Saturday) with less than 5h.
+            // Streak doesn't break, but doesn't increment.
+          }
         } else {
-          running = 0;
+          if (goalMet) {
+            running++;
+            if (running > longest) longest = running;
+          } else {
+            if (isToday) {
+              // Today is standard and not met yet, but is still in progress.
+            } else {
+              running = 0;
+            }
+          }
         }
       }
+
+      setCurrentStreak(running);
       setLongestStreak(longest);
     } catch (e) {
       console.error('[useStreak] Error:', e);
@@ -90,7 +111,12 @@ export function useStreak(): StreakState {
     calculate();
   }, [calculate]);
 
-  const todayProgress = Math.min(todayFocusSeconds / DAILY_GOAL_SECONDS, 1);
+  const todayStr = toDateString();
+  const [year, month, day] = todayStr.split('-').map(Number);
+  const todayD = new Date(year, month - 1, day);
+  const isTodayRest = todayD.getDay() === 5 || todayD.getDay() === 6;
+  const todayThreshold = isTodayRest ? 18000 : DAILY_GOAL_SECONDS;
+  const todayProgress = Math.min(todayFocusSeconds / todayThreshold, 1);
 
   return {
     currentStreak,
