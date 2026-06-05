@@ -113,10 +113,8 @@ function init() {
   renderChips();
   bindEvents();
   renderHome();
-  
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW Error:', err));
-  }
+  // Nota: el registre del Service Worker es fa a index.html
+  // per gestionar el toast d'actualització. No cal registrar-lo aquí.
 }
 
 function loadState() {
@@ -716,15 +714,22 @@ function renderCalendar() {
 
     const isRest = isRestDayString(dateStr);
 
+    // Dissabte (6) i Diumenge (0) son dies de cap de setmana visual
+    const dow = new Date(year, month, d).getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    // Mostra color verd de lliure si és cap de setmana i no hi ha sessions
+    const showWeekendFree = isWeekend && !hasSess && !isFuture;
+
     const cell = document.createElement('button');
     cell.className = [
       'cal-day',
-      isRest   ? 'cal-day--rest'     : '',
-      goalMet  ? 'cal-day--fire'     : '',
+      isRest         ? 'cal-day--rest'     : '',
+      goalMet        ? 'cal-day--fire'      : '',
       hasSess && !goalMet ? 'cal-day--partial' : '',
-      isToday  ? 'cal-day--today'    : '',
-      isFuture ? 'cal-day--future'   : '',
-      isSelected ? 'cal-day--selected' : ''
+      showWeekendFree ? 'cal-day--weekend'  : '',
+      isToday        ? 'cal-day--today'     : '',
+      isFuture       ? 'cal-day--future'    : '',
+      isSelected     ? 'cal-day--selected'  : ''
     ].join(' ').trim();
     cell.dataset.date = dateStr;
     cell.disabled = isFuture;

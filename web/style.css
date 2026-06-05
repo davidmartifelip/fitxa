@@ -654,6 +654,20 @@ html, body {
   color: var(--text-sec);
 }
 
+/* Cap de setmana (Ds/Dg) sense sessions → color verd de lliure */
+.cal-day--weekend:not(.cal-day--fire):not(.cal-day--partial) {
+  background: rgba(52, 199, 89, 0.10);
+  border: 1.5px dashed rgba(52, 199, 89, 0.30);
+}
+.cal-day--weekend:not(.cal-day--fire):not(.cal-day--partial) .cal-day-num {
+  color: rgba(52, 199, 89, 0.70);
+}
+/* Si coincideix amb avui, el border verd cedeix al border primari */
+.cal-day--weekend.cal-day--today:not(.cal-day--fire) {
+  border-color: var(--primary);
+  background: rgba(52, 199, 89, 0.08);
+}
+
 /* Fire (goal met) day */
 .cal-day--fire {
   background: rgba(255,100,20,0.15);
